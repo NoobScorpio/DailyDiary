@@ -72,8 +72,8 @@ router.post('/',async(req,res)=>
         }
         });
         if(user) return res.status(400).send('User already present!!');
+        
         //create new user
-
         user=await User.create({
             number:req.body.number,
             password:pass,
