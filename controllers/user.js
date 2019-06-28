@@ -12,6 +12,7 @@ require('dotenv').config();
 router.get('/',async(req,res)=>
 {
    let users=await User.findAll();
+   if(users<1) return res.status(400).send('No such user!!');
    let arr=[];
    for(let i=0;i<users.length;i++){
         let u=_.pick(users[i],['id','number','userType']);
@@ -30,7 +31,7 @@ router.get('/:user_id',async(req,res)=>
                     id:req.params.user_id
                 }
             });
-            
+    if(user.length<1) return res.status(400).send('No such user!!');
    res.status(200).send({
        number:user[0].number,
        id:user[0].id
@@ -41,27 +42,45 @@ router.get('/:user_id',async(req,res)=>
 /** Post User */
 router.post('/',async(req,res)=>
 {
-    let pass=req.body.password;
-    const salt=await bcrypt.genSalt(10);
-    pass=await bcrypt.hash(pass,salt);
-   
-    let user=await User.create({
+    //define user
+    let user={
+        number:req.body.number,
+        password:req.body.password,
+        userType:req.body.userType
+       };
+
+       //validate schema
+       validateUser(user)
+       .then(c=>{console.log("VALID")})
+       .catch(err=>{
+           return res.status(400).send("Enter valid requirements")
+        });
+
+       //hash password
+       const salt=await bcrypt.genSalt(10);
+       let pass=await bcrypt.hash(req.body.password,salt);
+       user={
         number:req.body.number,
         password:pass,
         userType:req.body.userType
-       });
+       };
 
-    const valid=validate(user);
-    if(!valid){
-        User.destroy({
-            where:user.id
-        })
-        .then(c=>{console.log(destroyed)})
-        .catch(e=>{console.log("Connot destroy")});
-        return res.status(400).send('Not valid inputs');
-    } 
-   // const token=jwt.sign({_id:user._id , number:user.number},process.env.JWT_SECRET);
-    res.status(200).send({
+       //find for existing user
+        user=await User.findOne({
+        where:{
+            number:req.body.number
+        }
+        });
+        if(user) return res.status(400).send('User already present!!');
+        //create new user
+
+        user=await User.create({
+            number:req.body.number,
+            password:pass,
+            userType:req.body.userType
+           });
+    
+        res.status(200).send({
         id:user.id,
         number:user.number,
         userType:user.userType
@@ -76,7 +95,7 @@ router.put('/:user_id', async(req, res)=> {
           password:req.body.password,
           userType:req.body.userType
     });
-    let valid=validate(user);
+    let valid=validateUser(user);
     if(!valid) return res.status(400).send("Not valid updates");
 
     user = await User.update(
@@ -109,12 +128,12 @@ then(t=>{
 })
 });
 
-function validate(user){
+async function validateUser(user){
  const schema={
      number:joi.string().min(5).required(),
      password:joi.string().min(5).required(),
      userType:joi.string().required()
  }
-    return joi.validate(user,schema);
+    return await joi.validate(user,schema);
 };
 module.exports=router;
